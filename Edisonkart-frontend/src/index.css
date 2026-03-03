@@ -1,0 +1,234 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+/* ===== EdisonKart Brand Design System ===== */
+/* Primary: Royal Blue #1E3A8A → hsl(224, 64%, 33%) */
+/* Secondary: Orange #F97316 → hsl(25, 95%, 53%) */
+/* Background: White #FFFFFF */
+/* Accent: Light Gray #F3F4F6 → hsl(220, 14%, 96%) */
+/* Success: #10B981 → hsl(160, 84%, 39%) */
+/* Error: #EF4444 → hsl(0, 84%, 60%) */
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+
+  --primary: 224 64% 33%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+
+  --accent: 25 95% 53%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+
+  --success: 160 84% 39%;
+  --success-foreground: 0 0% 100%;
+
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 224 64% 33%;
+
+  --radius: 0.75rem;
+
+  --brand-primary: #1E3A8A;
+  --brand-secondary: #F97316;
+  --brand-bg: #FFFFFF;
+  --brand-accent: #F3F4F6;
+}
+
+/* ===== Dark Theme ===== */
+.dark {
+  --background: 0 0% 4%;
+  /* #0B0B0B */
+  --foreground: 0 0% 95%;
+
+  --card: 224 64% 11%;
+  --card-foreground: 0 0% 95%;
+
+  --popover: 224 64% 11%;
+  --popover-foreground: 0 0% 95%;
+
+  --primary: 224 64% 45%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 224 30% 17%;
+  --secondary-foreground: 0 0% 95%;
+
+  --muted: 224 30% 17%;
+  --muted-foreground: 215 20% 65%;
+
+  --accent: 25 95% 53%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 63% 50%;
+  --destructive-foreground: 0 0% 98%;
+
+  --success: 160 84% 39%;
+  --success-foreground: 0 0% 100%;
+
+  --border: 224 30% 20%;
+  --input: 224 30% 20%;
+  --ring: 224 64% 45%;
+}
+
+@theme {
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-secondary: var(--brand-secondary);
+  --color-brand-bg: var(--brand-bg);
+  --color-brand-accent: var(--brand-accent);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+@utility container {
+  margin-inline: auto;
+  padding-inline: 2rem;
+
+  @media (width >=1400px) {
+    max-width: 1400px;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased transition-colors duration-300;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Global Cursor Fix */
+  button,
+  a,
+  [role="button"],
+  input[type="submit"],
+  input[type="button"],
+  input[type="reset"],
+  label,
+  select,
+  summary {
+    cursor: pointer;
+  }
+
+  /* Smooth scroll */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Selection */
+  ::selection {
+    background-color: hsl(224 64% 33% / 0.2);
+    color: hsl(var(--foreground));
+  }
+}
+
+/* Premium Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.4);
+}
+
+/* Skeleton Shine Animation */
+@keyframes skeleton-shine {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shine {
+  background: linear-gradient(90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--muted-foreground) / 0.08) 50%,
+      hsl(var(--muted)) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shine 1.5s ease-in-out infinite;
+}
+
+/* Pulse animation for "added to cart" */
+@keyframes cart-bounce {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.2);
+  }
+}
+
+.cart-bounce {
+  animation: cart-bounce 0.4s ease-in-out;
+}
+
+/* Focus visible ring */
+*:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}

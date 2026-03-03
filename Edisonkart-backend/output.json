@@ -1,0 +1,66 @@
+{
+  "result": [
+    {
+      "_id": {
+        "paymentStatus": "PAID",
+        "orderStatus": "DELIVERED"
+      },
+      "count": 7,
+      "total": 278525
+    },
+    {
+      "_id": {
+        "paymentStatus": "PAID",
+        "orderStatus": "CONFIRMED"
+      },
+      "count": 1,
+      "total": 190153
+    },
+    {
+      "_id": {
+        "paymentStatus": "PENDING",
+        "orderStatus": "DELIVERED"
+      },
+      "count": 4,
+      "total": 72320
+    },
+    {
+      "_id": {
+        "paymentStatus": "PAID",
+        "orderStatus": "SHIPPED"
+      },
+      "count": 1,
+      "total": 1199
+    },
+    {
+      "_id": {
+        "paymentStatus": "PENDING",
+        "orderStatus": "CONFIRMED"
+      },
+      "count": 1,
+      "total": 24291
+    },
+    {
+      "_id": {
+        "paymentStatus": "PAID",
+        "orderStatus": "PLACED"
+      },
+      "count": 2,
+      "total": 3898
+    },
+    {
+      "_id": {
+        "paymentStatus": "PENDING",
+        "orderStatus": "CANCELLED"
+      },
+      "count": 1,
+      "total": 947
+    }
+  ],
+  "PAID_Revenue": [
+    {
+      "_id": null,
+      "total": 473775
+    }
+  ]
+}

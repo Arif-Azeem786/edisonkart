@@ -20,7 +20,9 @@ import {
     ChevronLeft,
     ChevronRight,
     MapPin,
-    Info
+    Info,
+    Video,
+    X
 } from 'lucide-react'
 import { Button } from '../ui/button'
 import ProductCard from '../product/ProductCard'
@@ -28,18 +30,45 @@ import ProductRecommendations, { recordRecentlyViewed } from './ProductRecommend
 import useCartStore from '../../store/cartStore'
 import useAuthStore from '../../store/authStore'
 import useWishlistStore from '../../store/wishlistStore'
-import { getProductById, getProducts } from '../../services/product'
+import { getProductById, getProducts, getProductVideoUrl, getProductImage } from '../../services/product'
 import { getProductImageUrl, getProductImages, NO_IMAGE_PLACEHOLDER } from '../ui/imageUtils'
 import { useToast } from '../ui/use-toast'
 import { getProductReviews, createReview } from '../../services/review'
+import { getQuestions, askQuestion, answerQuestion } from '../../services/qa'
+import { Helmet } from 'react-helmet-async'
 import { checkPincodeServiceability } from '../../services/delivery'
 import { cn } from '../../lib/utils'
 import DOMPurify from 'dompurify'
 
+// Clean scraped product description: remove repeated phrases and format for display
+function formatProductDescription(raw) {
+    if (!raw || typeof raw !== 'string') return ''
+    let text = raw.trim()
+    // Collapse repeated phrases (e.g. "Key HighlightsKey Highlights+16" -> "Key Highlights")
+    const repeatedPhrases = ['Key Highlights', 'Product highlights', 'All details', 'Showcase', 'Specifications', 'Warranty', 'Manufacturer info', 'Show More']
+    repeatedPhrases.forEach(phrase => {
+        const regex = new RegExp(`(${phrase.replace(/\s+/g, '\\s*')})(\\s*\\1)*(\\s*\\+?\\d*)?`, 'gi')
+        text = text.replace(regex, phrase + ' ')
+    })
+    // Remove stray "+16" or similar
+    text = text.replace(/\s*\+\d+\s*/g, ' ')
+    // Normalize multiple newlines and spaces
+    text = text.replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ')
+    const lines = text.split(/\n/).map(l => l.trim()).filter(Boolean)
+    const formatted = lines.map(line => {
+        if (line.includes('|') && line.length < 250) {
+            return line.split('|').map(s => s.trim()).filter(Boolean).join(' • ')
+        }
+        return line
+    }).join('\n\n')
+    return formatted.trim() || raw.trim()
+}
+
 const ProductDetails = () => {
     const { id, slug } = useParams()
     const productId = id || slug
-    const [selectedImage, setSelectedImage] = useState(0)
+    const [selectedMediaIndex, setSelectedMediaIndex] = useState(0)
+    const [lightboxOpen, setLightboxOpen] = useState(false)
     const [quantity, setQuantity] = useState(1)
     const { addItem, isLoading: cartLoading } = useCartStore()
     const { isAuthenticated } = useAuthStore()
@@ -63,6 +92,11 @@ const ProductDetails = () => {
     const [reviewLoading, setReviewLoading] = useState(false)
     const [showReviewForm, setShowReviewForm] = useState(false)
 
+    const [questions, setQuestions] = useState([])
+    const [newQuestion, setNewQuestion] = useState('')
+    const [showQA, setShowQA] = useState(false)
+    const [answerTexts, setAnswerTexts] = useState({})
+
     const { toggleWishlist, isInWishlist, fetchWishlist } = useWishlistStore()
     const isProductInWishlist = isInWishlist(product?._id)
 
@@ -75,6 +109,14 @@ const ProductDetails = () => {
             fetchWishlist()
         }
     }, [isAuthenticated, fetchWishlist])
+
+    useEffect(() => {
+        if (product?._id) {
+            getQuestions(product._id).then(res => {
+                setQuestions(res?.data || res || [])
+            }).catch(() => {})
+        }
+    }, [product?._id])
 
     const { data: relatedData } = useQuery({
         queryKey: ['products', 'related', product?.categoryId?._id || 'all'],
@@ -102,9 +144,9 @@ const ProductDetails = () => {
         }
     }, [selectedAttributes, product]);
 
-    // Reset image selection when variant changes (e.g. color)
+    // Reset media selection when variant changes (e.g. color)
     useEffect(() => {
-        setSelectedImage(0);
+        setSelectedMediaIndex(0);
     }, [selectedVariant]);
 
     // Initialize selected attributes
@@ -120,16 +162,37 @@ const ProductDetails = () => {
 
     useEffect(() => {
         window.scrollTo(0, 0)
-        setSelectedImage(0)
+        setSelectedMediaIndex(0)
         setQuantity(1)
         if (product) recordRecentlyViewed(product)
     }, [id, product])
+
+    // Close lightbox on Escape
+    useEffect(() => {
+        const onEscape = (e) => { if (e.key === 'Escape') setLightboxOpen(false) }
+        if (lightboxOpen) {
+            document.addEventListener('keydown', onEscape)
+            document.body.style.overflow = 'hidden'
+        }
+        return () => {
+            document.removeEventListener('keydown', onEscape)
+            document.body.style.overflow = ''
+        }
+    }, [lightboxOpen])
 
     // Use variant images when selected variant has its own images (e.g. color change)
     const variantImageIds = selectedVariant?.imageIds && selectedVariant.imageIds?.length > 0
       ? selectedVariant.imageIds
       : product?.imageIds
-    const images = variantImageIds?.length ? getProductImages(variantImageIds) : (product?.imageIds ? getProductImages(product.imageIds) : [])
+    const imageUrls = variantImageIds?.length ? getProductImages(variantImageIds) : (product?.imageIds ? getProductImages(product.imageIds) : [])
+
+    // Build unified media (images + videos) for Flipkart-style gallery
+    const videoUrls = (product?.videoIds || []).map(id => getProductVideoUrl(id))
+    const media = [
+      ...imageUrls.map(url => ({ type: 'image', url })),
+      ...videoUrls.map(url => ({ type: 'video', url }))
+    ]
+    const hasMedia = media.length > 0
     
     // Dynamic values based on variant
     const displayPrice = selectedVariant ? (selectedVariant.discountPrice || selectedVariant.price) : (product?.discountPrice || product?.price);
@@ -228,6 +291,27 @@ const ProductDetails = () => {
         } finally {
             setReviewLoading(false)
         }
+    }
+
+    const handleAskQuestion = async () => {
+        if (!newQuestion.trim() || !product?._id) return
+        try {
+            await askQuestion(product._id, newQuestion.trim())
+            setNewQuestion('')
+            const res = await getQuestions(product._id)
+            setQuestions(res?.data || res || [])
+        } catch {}
+    }
+
+    const handleAnswer = async (questionId) => {
+        const text = answerTexts[questionId]?.trim()
+        if (!text) return
+        try {
+            await answerQuestion(questionId, text)
+            setAnswerTexts(prev => ({ ...prev, [questionId]: '' }))
+            const res = await getQuestions(product._id)
+            setQuestions(res?.data || res || [])
+        } catch {}
     }
 
     const handleCopyLink = () => {
@@ -351,6 +435,13 @@ const ProductDetails = () => {
 
     return (
         <div className="pt-24 pb-24 md:pb-16 bg-background">
+            <Helmet>
+                <title>{product?.name ? `${product.name} — EdisonKart` : 'EdisonKart'}</title>
+                <meta name="description" content={product?.description?.slice(0, 160) || 'Shop premium products on EdisonKart'} />
+                <meta property="og:title" content={product?.name || 'EdisonKart'} />
+                <meta property="og:description" content={product?.description?.slice(0, 160) || ''} />
+                {product?.imageIds?.[0] && <meta property="og:image" content={getProductImage(product.imageIds[0])} />}
+            </Helmet>
             {/* Breadcrumb */}
             <div className="max-w-7xl mx-auto px-4 mb-8">
                 <nav className="flex items-center gap-2 text-sm text-muted-foreground overflow-x-auto whitespace-nowrap pb-2 custom-scrollbar">
@@ -382,32 +473,71 @@ const ProductDetails = () => {
                         transition={{ duration: 0.5 }}
                         className="space-y-4"
                     >
-                        <div className="aspect-square rounded-3xl overflow-hidden bg-white border border-border/50 relative group">
+                        <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => hasMedia && setLightboxOpen(true)}
+                            onKeyDown={(e) => hasMedia && (e.key === 'Enter' || e.key === ' ') && setLightboxOpen(true)}
+                            className="aspect-square rounded-3xl overflow-hidden bg-white border border-border/50 relative group cursor-zoom-in"
+                        >
                             <AnimatePresence mode="wait">
-                                <motion.img
-                                    key={selectedImage}
-                                    initial={{ opacity: 0, scale: 1.1 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    exit={{ opacity: 0 }}
-                                    transition={{ duration: 0.4 }}
-                                    src={images[selectedImage] || NO_IMAGE_PLACEHOLDER}
-                                    alt={product.name}
-                                    className="w-full h-full object-contain p-4 sm:p-8"
-                                />
+                                {hasMedia ? (
+                                    media[selectedMediaIndex].type === 'video' ? (
+                                        <motion.div
+                                            key={`video-${selectedMediaIndex}`}
+                                            initial={{ opacity: 0, scale: 1.02 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            transition={{ duration: 0.3 }}
+                                            className="w-full h-full flex items-center justify-center bg-slate-900"
+                                        >
+                                            <video
+                                                src={media[selectedMediaIndex].url}
+                                                controls
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="w-full h-full object-contain"
+                                                preload="metadata"
+                                                playsInline
+                                            />
+                                        </motion.div>
+                                    ) : (
+                                        <motion.img
+                                            key={`img-${selectedMediaIndex}`}
+                                            initial={{ opacity: 0, scale: 1.1 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            transition={{ duration: 0.4 }}
+                                            src={media[selectedMediaIndex].url}
+                                            alt={product.name}
+                                            className="w-full h-full object-contain p-4 sm:p-8"
+                                        />
+                                    )
+                                ) : (
+                                    <motion.img
+                                        key="placeholder"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        src={NO_IMAGE_PLACEHOLDER}
+                                        alt={product.name}
+                                        className="w-full h-full object-contain p-4 sm:p-8"
+                                    />
+                                )}
                             </AnimatePresence>
 
                             {/* Navigation Arrows */}
-                            {images.length > 1 && (
+                            {media.length > 1 && (
                                 <>
                                     <button
-                                        onClick={() => setSelectedImage((prev) => (prev > 0 ? prev - 1 : images.length - 1))}
-                                        className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 backdrop-blur-sm border border-border shadow-sm flex items-center justify-center text-slate-700 hover:bg-white transition-all opacity-0 group-hover:opacity-100"
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); setSelectedMediaIndex((prev) => (prev > 0 ? prev - 1 : media.length - 1)); }}
+                                        className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 backdrop-blur-sm border border-border shadow-sm flex items-center justify-center text-slate-700 hover:bg-white transition-all opacity-0 group-hover:opacity-100 z-10"
                                     >
                                         <ChevronLeft className="h-6 w-6" />
                                     </button>
                                     <button
-                                        onClick={() => setSelectedImage((prev) => (prev < images.length - 1 ? prev + 1 : 0))}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 backdrop-blur-sm border border-border shadow-sm flex items-center justify-center text-slate-700 hover:bg-white transition-all opacity-0 group-hover:opacity-100"
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); setSelectedMediaIndex((prev) => (prev < media.length - 1 ? prev + 1 : 0)); }}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 backdrop-blur-sm border border-border shadow-sm flex items-center justify-center text-slate-700 hover:bg-white transition-all opacity-0 group-hover:opacity-100 z-10"
                                     >
                                         <ChevronRight className="h-6 w-6" />
                                     </button>
@@ -415,20 +545,27 @@ const ProductDetails = () => {
                             )}
                         </div>
 
-                        {/* Thumbnails */}
-                        {images.length > 1 && (
+                        {/* Thumbnails: images + videos side by side (Flipkart-style) */}
+                        {media.length > 1 && (
                             <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
-                                {images.map((img, i) => (
+                                {media.map((item, i) => (
                                     <button
                                         key={i}
-                                        onClick={() => setSelectedImage(i)}
-                                        className={`shrink-0 w-20 h-20 rounded-xl overflow-hidden border-2 transition-all ${
-                                            selectedImage === i 
-                                            ? 'border-primary shadow-md scale-95' 
-                                            : 'border-border/50 hover:border-primary/50 grayscale hover:grayscale-0'
+                                        onClick={() => setSelectedMediaIndex(i)}
+                                        type="button"
+                                        className={`shrink-0 w-20 h-20 rounded-xl overflow-hidden border-2 transition-all relative ${
+                                            selectedMediaIndex === i
+                                                ? 'border-primary shadow-md ring-2 ring-primary/20'
+                                                : 'border-border/50 hover:border-primary/50'
                                         }`}
                                     >
-                                        <img src={img} alt="" className="w-full h-full object-contain p-2" />
+                                        {item.type === 'video' ? (
+                                            <div className="w-full h-full bg-slate-800 flex items-center justify-center">
+                                                <Video className="h-8 w-8 text-white/90" />
+                                            </div>
+                                        ) : (
+                                            <img src={item.url} alt="" className="w-full h-full object-contain p-2 bg-white" />
+                                        )}
                                     </button>
                                 ))}
                             </div>
@@ -492,10 +629,10 @@ const ProductDetails = () => {
 
                         {/* Price */}
                         <div className="flex items-baseline gap-4">
-                            <span className="text-3xl sm:text-4xl font-bold text-[#1E3A8A]">₹{displayPrice.toLocaleString()}</span>
+                            <span className="text-3xl sm:text-4xl font-bold text-[#1E3A8A]">₹{Math.round(displayPrice).toLocaleString('en-IN')}</span>
                             {originalPrice > displayPrice && (
                                 <>
-                                    <span className="text-xl text-slate-400 line-through">₹{originalPrice.toLocaleString()}</span>
+                                    <span className="text-xl text-slate-400 line-through">₹{Math.round(originalPrice).toLocaleString('en-IN')}</span>
                                     <span className="text-green-600 font-bold bg-green-50 px-2.5 py-1 rounded-lg text-sm">
                                         {Math.round(((originalPrice - displayPrice) / originalPrice) * 100)}% OFF
                                     </span>
@@ -742,6 +879,80 @@ const ProductDetails = () => {
                     </div>
                 </div>
 
+                {/* Q&A Section */}
+                <div className="mt-12 bg-card rounded-2xl border border-border/50 p-6 md:p-8">
+                    <button onClick={() => setShowQA(!showQA)} className="w-full flex items-center justify-between">
+                        <h2 className="text-xl font-bold text-foreground">Questions & Answers ({questions.length})</h2>
+                        <ChevronRight className={`h-5 w-5 text-muted-foreground transition-transform ${showQA ? 'rotate-90' : ''}`} />
+                    </button>
+
+                    {showQA && (
+                        <div className="mt-6 space-y-6">
+                            {/* Ask a question */}
+                            <div className="flex gap-3">
+                                <input
+                                    type="text"
+                                    placeholder="Have a question? Ask here..."
+                                    value={newQuestion}
+                                    onChange={(e) => setNewQuestion(e.target.value)}
+                                    className="flex-1 px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                                    maxLength={500}
+                                />
+                                <Button onClick={handleAskQuestion} disabled={!newQuestion.trim()} size="sm" className="rounded-xl px-6">
+                                    Ask
+                                </Button>
+                            </div>
+
+                            {/* Questions list */}
+                            {questions.length === 0 ? (
+                                <p className="text-sm text-muted-foreground text-center py-8">No questions yet. Be the first to ask!</p>
+                            ) : (
+                                <div className="space-y-4">
+                                    {questions.map((q) => (
+                                        <div key={q._id} className="border border-border/50 rounded-xl p-4">
+                                            <div className="flex items-start gap-3">
+                                                <span className="font-bold text-primary text-sm mt-0.5">Q:</span>
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-medium text-foreground">{q.text}</p>
+                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                        Asked by {q.userId?.name || 'User'} • {new Date(q.createdAt).toLocaleDateString()}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {(q.answers || []).map((a) => (
+                                                <div key={a._id} className="ml-6 mt-3 pl-3 border-l-2 border-primary/20">
+                                                    <div className="flex items-start gap-2">
+                                                        <span className="font-bold text-green-600 text-sm">A:</span>
+                                                        <div>
+                                                            <p className="text-sm text-foreground">{a.text}</p>
+                                                            <p className="text-xs text-muted-foreground mt-1">
+                                                                {a.userId?.name || 'User'} {a.userId?.role === 'ADMIN' ? '(EdisonKart)' : ''} • {new Date(a.createdAt).toLocaleDateString()}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <div className="ml-6 mt-3 flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Write an answer..."
+                                                    value={answerTexts[q._id] || ''}
+                                                    onChange={(e) => setAnswerTexts(prev => ({ ...prev, [q._id]: e.target.value }))}
+                                                    className="flex-1 px-3 py-1.5 bg-muted/30 border border-border rounded-lg text-xs outline-none"
+                                                    maxLength={1000}
+                                                />
+                                                <button onClick={() => handleAnswer(q._id)} disabled={!answerTexts[q._id]?.trim()} className="text-xs font-semibold text-primary hover:text-primary/80 disabled:opacity-50">
+                                                    Answer
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
                 <div className="mt-16">
                     <div className="border-b border-border/50 mb-8 pb-4">
                         <h3 className="text-xl font-bold font-syne uppercase tracking-wider text-[#F97316]">Product Description</h3>
@@ -749,13 +960,18 @@ const ProductDetails = () => {
                     <div className="bg-card p-5 sm:p-8 rounded-2xl border border-border/50">
                         <div
                             className={cn(
-                                "text-muted-foreground leading-relaxed text-lg [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:mb-1 [&_strong]:font-bold [&_em]:italic [&_a]:text-[#F97316] [&_a]:underline hover:[&_a]:no-underline",
-                                /<[a-z][\s\S]*>/i.test(product.description || '') ? "" : "whitespace-pre-line"
+                                "text-muted-foreground leading-relaxed text-base sm:text-lg [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:mb-1 [&_strong]:font-bold [&_em]:italic [&_a]:text-[#F97316] [&_a]:underline hover:[&_a]:no-underline",
+                                /<[a-z][\s\S]*>/i.test(product.description || '') ? '' : 'whitespace-pre-line'
                             )}
                             dangerouslySetInnerHTML={{
-                                __html: product.description && /<[a-z][\s\S]*>/i.test(product.description)
-                                    ? DOMPurify.sanitize(product.description, { ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'h2', 'h3', 'a'], ALLOWED_ATTR: ['href'] })
-                                    : DOMPurify.sanitize((product.description || 'No description available for this product.').replace(/</g, '&lt;').replace(/>/g, '&gt;'))
+                                __html: (() => {
+                                    const raw = product.description || 'No description available for this product.'
+                                    const cleaned = formatProductDescription(raw)
+                                    if (/<[a-z][\s\S]*>/i.test(cleaned)) {
+                                        return DOMPurify.sanitize(cleaned, { ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'h2', 'h3', 'a'], ALLOWED_ATTR: ['href'] })
+                                    }
+                                    return DOMPurify.sanitize(cleaned.replace(/</g, '&lt;').replace(/>/g, '&gt;'))
+                                })()
                             }}
                         />
                     </div>
@@ -795,6 +1011,97 @@ const ProductDetails = () => {
             {product && (
                 <ProductRecommendations currentProduct={product} selectedVariant={selectedVariant} />
             )}
+
+            {/* Full-screen image/video lightbox (Flipkart-style) */}
+            <AnimatePresence>
+                {lightboxOpen && hasMedia && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="fixed inset-0 z-[100] flex flex-col bg-white dark:bg-slate-950"
+                    >
+                        {/* Close button - top left */}
+                        <button
+                            type="button"
+                            onClick={() => setLightboxOpen(false)}
+                            className="absolute top-4 left-4 z-20 w-12 h-12 rounded-full bg-black/10 hover:bg-black/20 flex items-center justify-center text-slate-700 dark:text-slate-200 transition-colors"
+                            aria-label="Close"
+                        >
+                            <X className="h-6 w-6" />
+                        </button>
+
+                        {/* Main content - centered image/video */}
+                        <div className="flex-1 flex items-center justify-center min-h-0 relative">
+                            {media[selectedMediaIndex].type === 'video' ? (
+                                <div className="w-full h-full max-h-[85vh] flex items-center justify-center bg-slate-900">
+                                    <video
+                                        src={media[selectedMediaIndex].url}
+                                        controls
+                                        autoPlay
+                                        className="max-w-full max-h-[85vh] object-contain"
+                                        preload="auto"
+                                        playsInline
+                                    />
+                                </div>
+                            ) : (
+                                <motion.img
+                                    key={selectedMediaIndex}
+                                    initial={{ opacity: 0, scale: 0.98 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ duration: 0.2 }}
+                                    src={media[selectedMediaIndex].url}
+                                    alt={product.name}
+                                    className="max-w-full max-h-[85vh] w-auto h-auto object-contain"
+                                />
+                            )}
+
+                            {/* Left arrow */}
+                            {media.length > 1 && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedMediaIndex((prev) => (prev > 0 ? prev - 1 : media.length - 1))}
+                                        className="absolute left-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors z-10"
+                                        aria-label="Previous"
+                                    >
+                                        <ChevronLeft className="h-7 w-7" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedMediaIndex((prev) => (prev < media.length - 1 ? prev + 1 : 0))}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors z-10"
+                                        aria-label="Next"
+                                    >
+                                        <ChevronRight className="h-7 w-7" />
+                                    </button>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Pagination dots - bottom */}
+                        {media.length > 1 && (
+                            <div className="flex justify-center gap-2 py-6 pb-8">
+                                {media.map((_, i) => (
+                                    <button
+                                        key={i}
+                                        type="button"
+                                        onClick={() => setSelectedMediaIndex(i)}
+                                        className={cn(
+                                            'rounded-full transition-all',
+                                            i === selectedMediaIndex
+                                                ? 'w-8 h-2.5 bg-[#1E3A8A] dark:bg-blue-500'
+                                                : 'w-2.5 h-2.5 bg-slate-300 dark:bg-slate-600 hover:bg-slate-400'
+                                        )}
+                                        aria-label={`Go to item ${i + 1}`}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Sticky Mobile Buy Bar */}
             <div className="md:hidden fixed bottom-16 left-0 right-0 z-40 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 px-4 py-3 shadow-2xl">

@@ -1,5 +1,5 @@
 {
-  "name": "bd",
+  "name": "edisonkart-backend",
   "version": "1.0.0",
   "description": "E-commerce backend for Edisonkart",
   "main": "src/server.js",
@@ -9,11 +9,10 @@
     "seed": "node src/utils/seed.js"
   },
   "dependencies": {
-    "razorpay": "^2.9.5",
+    "@google/generative-ai": "^0.24.1",
     "axios": "^1.5.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "crypto": "^1.0.1",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-rate-limit": "^6.11.2",
@@ -23,8 +22,13 @@
     "mongoose": "^7.5.0",
     "multer": "^1.4.4",
     "multer-gridfs-storage": "^5.0.2",
-    "nodemailer": "^6.9.5",
-    "pdfkit": "^0.17.2"
+    "nodemailer": "^6.10.1",
+    "openai": "^6.25.0",
+    "pdfkit": "^0.17.2",
+    "puppeteer": "^24.37.5",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "razorpay": "^2.9.5"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

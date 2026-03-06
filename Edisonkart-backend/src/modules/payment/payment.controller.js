@@ -42,15 +42,20 @@ const paymentController = {
               order.paymentStatus = 'PAID';
               await order.save();
 
-              // Reduce stock
               for (const item of order.items) {
-                await Product.updateOne(
-                  { _id: item.productId, stock: { $gte: item.quantity } },
-                  { $inc: { stock: -item.quantity } }
-                );
+                if (item.variantId) {
+                  await Product.updateOne(
+                    { _id: item.productId, 'variants._id': item.variantId },
+                    { $inc: { 'variants.$.stock': -item.quantity } }
+                  );
+                } else {
+                  await Product.updateOne(
+                    { _id: item.productId, stock: { $gte: item.quantity } },
+                    { $inc: { stock: -item.quantity } }
+                  );
+                }
               }
 
-              // Clear cart
               await Cart.deleteOne({ userId: order.userId });
             }
           }
@@ -245,12 +250,18 @@ const paymentController = {
           order.paymentStatus = 'PAID';
           await order.save();
 
-          // Reduce stock
           for (const item of order.items) {
-            await Product.updateOne(
-              { _id: item.productId, stock: { $gte: item.quantity } },
-              { $inc: { stock: -item.quantity } }
-            );
+            if (item.variantId) {
+              await Product.updateOne(
+                { _id: item.productId, 'variants._id': item.variantId },
+                { $inc: { 'variants.$.stock': -item.quantity } }
+              );
+            } else {
+              await Product.updateOne(
+                { _id: item.productId, stock: { $gte: item.quantity } },
+                { $inc: { stock: -item.quantity } }
+              );
+            }
           }
 
           // Clear cart

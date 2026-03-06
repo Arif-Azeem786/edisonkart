@@ -15,7 +15,7 @@ const wishlistController = {
                 return successResponse(res, wishlist, 'Product added to wishlist', 201);
             }
 
-            const productIndex = wishlist.products.indexOf(productId);
+            const productIndex = wishlist.products.findIndex(p => p.toString() === productId);
             let message = '';
             
             if (productIndex === -1) {

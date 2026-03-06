@@ -114,20 +114,85 @@ const orderController = {
         return errorResponse(res, 'Address not found', 400);
       }
 
-      // Add shipping charges
-      const shippingFee = totalAmount > 999 ? 0 : 99;
-      totalAmount += shippingFee;
-
-      // Validate phone before calling Cashfree
       const phone = address.phone?.replace(/\D/g, '');
       if (!phone || phone.length < 10) {
         return errorResponse(res, 'Please update your phone number in your address. A valid 10-digit phone number is required for payment.', 400);
       }
 
-      // Generate orderId ONCE — used for both Razorpay and DB
       const orderId = generateOrderId();
+      const { paymentMethod } = req.body;
 
-      // Create Razorpay order
+      if (paymentMethod === 'cod') {
+        const Settings = require('../settings/settings.model');
+        const codAllowed = await Settings.get('codEnabled', false);
+        if (!codAllowed) {
+          return errorResponse(res, 'Cash on Delivery is not available at this time.', 400);
+        }
+
+        // Reduce stock for COD orders
+        for (const item of orderItems) {
+          if (item.variantId) {
+            await Product.updateOne(
+              { _id: item.productId, 'variants._id': item.variantId, 'variants.stock': { $gte: item.quantity } },
+              { $inc: { 'variants.$.stock': -item.quantity } }
+            );
+          } else {
+            await Product.updateOne(
+              { _id: item.productId, stock: { $gte: item.quantity } },
+              { $inc: { stock: -item.quantity } }
+            );
+          }
+        }
+
+        // Clear user cart
+        await Cart.deleteOne({ userId: req.user.userId });
+
+        const order = await Order.create({
+          orderId,
+          userId: req.user.userId,
+          items: orderItems,
+          totalAmount,
+          paymentMethod: 'cod',
+          statusHistory: [{
+            status: 'PLACED',
+            timestamp: new Date(),
+            comment: 'COD order placed successfully'
+          }],
+          addressSnapshot: {
+            name: address.name,
+            phone: address.phone,
+            addressLine1: address.addressLine1,
+            addressLine2: address.addressLine2,
+            city: address.city,
+            state: address.state,
+            pincode: address.pincode
+          }
+        });
+
+        await Payment.create({
+          orderId,
+          gatewayOrderId: `COD-${orderId}`,
+          amount: totalAmount,
+          status: 'COD_PENDING'
+        });
+
+        // Send COD order confirmation email & notification
+        try {
+          const orderUser = await User.findById(req.user.userId);
+          if (orderUser?.email) {
+            emailService.sendOrderConfirmation(orderUser.email, { orderId, totalAmount, items: orderItems }).catch(() => {});
+          }
+          const { createNotification } = require('../notification/notification.controller');
+          createNotification({ userId: req.user.userId, type: 'order_placed', title: 'Order Placed!', message: `Your COD order #${orderId} has been placed. Pay ₹${Math.round(totalAmount).toLocaleString('en-IN')} on delivery.`, link: `/orders/${orderId}` }).catch(() => {});
+        } catch (_) {}
+
+        return successResponse(res, {
+          orderId,
+          amount: totalAmount,
+          paymentMethod: 'cod',
+        }, 'COD order placed successfully');
+      }
+
       let razorpayOrder;
       try {
         razorpayOrder = await razorpayService.createOrder({
@@ -141,7 +206,6 @@ const orderController = {
         return errorResponse(res, paymentError.message || 'Payment gateway error. Please try again.', 400);
       }
 
-      // Create order in DB
       const order = await Order.create({
         orderId,
         userId: req.user.userId,
@@ -163,7 +227,6 @@ const orderController = {
         }
       });
 
-      // Save payment record
       await Payment.create({
         orderId,
         gatewayOrderId: razorpayOrder.id,
@@ -175,7 +238,6 @@ const orderController = {
         orderId,
         razorpayOrderId: razorpayOrder.id,
         razorpayKeyId: process.env.RAZORPAY_KEY_ID,
-        // Backward-compatible field name used previously for Cashfree
         paymentSessionId: razorpayOrder.id,
         amount: totalAmount
       }, 'Order created successfully');
@@ -255,9 +317,13 @@ const orderController = {
           // Clear user cart
           await Cart.deleteOne({ userId: order.userId });
 
-          // Send confirmation email
+          // Send confirmation email & in-app notification
           const user = await User.findById(order.userId);
-          if (user) await emailService.sendOrderConfirmation(user.email, order);
+          if (user) {
+            emailService.sendOrderConfirmation(user.email, order).catch(() => {});
+            const { createNotification } = require('../notification/notification.controller');
+            createNotification({ userId: order.userId, type: 'order_confirmed', title: 'Order Confirmed!', message: `Payment received for order #${order.orderId}. We're processing it now.`, link: `/orders/${order.orderId}` }).catch(() => {});
+          }
         }
       }
 
@@ -380,6 +446,24 @@ const orderController = {
       if (!order) {
         return errorResponse(res, 'Order not found', 404);
       }
+
+      // Send email & in-app notification for key status changes
+      try {
+        const user = await User.findById(order.userId);
+        if (user?.email && ['SHIPPED', 'DELIVERED', 'OUT_FOR_DELIVERY'].includes(status)) {
+          emailService.sendOrderUpdate(user.email, order, status).catch(() => {});
+        }
+        const { createNotification } = require('../notification/notification.controller');
+        const notifMap = {
+          CONFIRMED: { type: 'order_confirmed', title: 'Order Confirmed', message: `Your order #${order.orderId} has been confirmed.` },
+          SHIPPED: { type: 'order_shipped', title: 'Order Shipped', message: `Your order #${order.orderId} has been shipped!` },
+          OUT_FOR_DELIVERY: { type: 'order_shipped', title: 'Out for Delivery', message: `Your order #${order.orderId} is out for delivery.` },
+          DELIVERED: { type: 'order_delivered', title: 'Order Delivered', message: `Your order #${order.orderId} has been delivered. Enjoy!` },
+        };
+        if (notifMap[status]) {
+          createNotification({ userId: order.userId, type: notifMap[status].type, title: notifMap[status].title, message: notifMap[status].message, link: `/orders/${order.orderId}` }).catch(() => {});
+        }
+      } catch (_) {}
 
       successResponse(res, order, 'Order status updated');
     } catch (error) {
@@ -509,7 +593,73 @@ const orderController = {
     } catch (error) {
       next(error);
     }
-  }
+  },
+
+  async getReturnRequests(req, res, next) {
+    try {
+      const orders = await Order.find({
+        orderStatus: { $in: ['RETURN_REQUESTED', 'REPLACEMENT_REQUESTED'] }
+      }).sort({ updatedAt: -1 }).populate('userId', 'name email').lean();
+
+      successResponse(res, orders);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async approveReturn(req, res, next) {
+    try {
+      const { orderId } = req.params;
+      const { action, comment } = req.body;
+
+      const order = await Order.findOne({ orderId });
+      if (!order) return errorResponse(res, 'Order not found', 404);
+
+      if (!['RETURN_REQUESTED', 'REPLACEMENT_REQUESTED'].includes(order.orderStatus)) {
+        return errorResponse(res, 'No return/replacement request pending for this order', 400);
+      }
+
+      if (action === 'approve') {
+        const newStatus = order.orderStatus === 'RETURN_REQUESTED' ? 'RETURNED' : 'REPLACED';
+        order.orderStatus = newStatus;
+        order.statusHistory.push({
+          status: newStatus,
+          comment: comment || 'Return/replacement approved by admin',
+          changedBy: req.user.userId,
+        });
+
+        if (order.orderStatus === 'RETURNED') {
+          for (const item of order.items) {
+            if (item.variantId) {
+              await Product.updateOne(
+                { _id: item.productId, 'variants._id': item.variantId },
+                { $inc: { 'variants.$.stock': item.quantity } }
+              );
+            } else {
+              await Product.updateOne(
+                { _id: item.productId },
+                { $inc: { stock: item.quantity } }
+              );
+            }
+          }
+        }
+      } else if (action === 'reject') {
+        order.orderStatus = 'DELIVERED';
+        order.statusHistory.push({
+          status: 'DELIVERED',
+          comment: comment || 'Return/replacement request rejected by admin',
+          changedBy: req.user.userId,
+        });
+      } else {
+        return errorResponse(res, 'Action must be "approve" or "reject"', 400);
+      }
+
+      await order.save();
+      successResponse(res, order, `Return ${action}d successfully`);
+    } catch (error) {
+      next(error);
+    }
+  },
 };
 
 module.exports = orderController;

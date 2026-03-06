@@ -25,8 +25,14 @@ const AuthLayout = ({ children, title, subtitle }) => {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.15 }}
+                            className="flex items-center gap-2.5 mb-2"
                         >
-                            <img src="/logo.png" alt="EdisonKart" className="h-12 w-auto brightness-0 invert opacity-90 mb-2" />
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#F97316] to-[#EA580C] flex items-center justify-center shadow-lg shadow-[#F97316]/25">
+                                <span className="text-white font-black text-lg">E</span>
+                            </div>
+                            <span className="text-2xl font-black tracking-tight text-white">
+                                Edison<span className="text-[#F97316]">Kart</span>
+                            </span>
                         </motion.div>
                         <motion.h2
                             initial={{ opacity: 0, y: 10 }}
@@ -98,8 +104,13 @@ const AuthLayout = ({ children, title, subtitle }) => {
                 <div className="md:w-[58%] p-8 md:p-10 lg:p-12 flex flex-col">
                     {/* Mobile Logo */}
                     <div className="md:hidden flex justify-center mb-6">
-                        <Link to="/">
-                            <img src="/logo.png" alt="EdisonKart" className="h-9 w-auto" />
+                        <Link to="/" className="flex items-center gap-2">
+                            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#F97316] to-[#EA580C] flex items-center justify-center shadow-md">
+                                <span className="text-white font-black text-base">E</span>
+                            </div>
+                            <span className="text-xl font-black tracking-tight text-[#1E3A8A]">
+                                Edison<span className="text-[#F97316]">Kart</span>
+                            </span>
                         </Link>
                     </div>
 

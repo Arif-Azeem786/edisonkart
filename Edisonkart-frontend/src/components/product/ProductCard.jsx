@@ -282,11 +282,11 @@ const ProductCard = ({ product }) => {
               <div className="flex flex-col min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-lg sm:text-xl font-bold text-[#F97316] truncate">
-                    ₹{Math.round(displayPrice).toLocaleString()}
+                    ₹{Math.round(displayPrice).toLocaleString('en-IN')}
                   </span>
                   {hasDiscount && (
                     <span className="text-xs sm:text-sm text-slate-400 dark:text-slate-600 line-through decoration-slate-400 dark:decoration-slate-600 shrink-0">
-                      ₹{product.price.toLocaleString()}
+                      ₹{Math.round(product.price).toLocaleString('en-IN')}
                     </span>
                   )}
                 </div>

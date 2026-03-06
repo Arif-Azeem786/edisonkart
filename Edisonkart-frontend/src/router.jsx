@@ -24,6 +24,7 @@ const VerifyOTP = lazy(() => import('./components/pages/VerifyOTP'))
 const About = lazy(() => import('./components/pages/About'))
 const Contact = lazy(() => import('./components/pages/Contact'))
 const Wishlist = lazy(() => import('./components/pages/Wishlist'))
+const Notifications = lazy(() => import('./components/pages/Notifications'))
 import Terms from './components/pages/Terms'
 import Privacy from './components/pages/Privacy'
 import Profile from './components/pages/Profile'
@@ -32,6 +33,7 @@ import ResetPassword from './components/pages/ResetPassword'
 import NotFound from './components/pages/404'
 const Checkout = lazy(() => import('./components/pages/Checkout'))
 const OrderDetailsPage = lazy(() => import('./components/pages/OrderDetails'))
+const ImportProduct = lazy(() => import('./components/pages/ImportProduct'))
 // Admin pages
 const AdminDashboard = lazy(() => import('./components/pages/admin/Dashboard'))
 const AdminProducts = lazy(() => import('./components/pages/admin/Products'))
@@ -39,6 +41,10 @@ const AdminCategories = lazy(() => import('./components/pages/admin/Categories')
 const AdminOrders = lazy(() => import('./components/pages/admin/Orders'))
 const AdminUsers = lazy(() => import('./components/pages/admin/Users'))
 const AdminContactSubmissions = lazy(() => import('./components/pages/admin/ContactSubmissions'))
+const AdminBanners = lazy(() => import('./components/pages/admin/Banners'))
+const AdminCoupons = lazy(() => import('./components/admin/AdminCoupons'))
+const AdminReturns = lazy(() => import('./components/admin/AdminReturns'))
+const AdminSettings = lazy(() => import('./components/admin/AdminSettings'))
 
 // Delivery pages
 const DeliveryDashboard = lazy(() => import('./components/pages/delivery/Dashboard'))
@@ -126,6 +132,22 @@ export const router = createBrowserRouter([
                     {withSuspense(Wishlist)}
                 </ProtectedRoute>
             ) },
+            {
+                path: 'notifications',
+                element: (
+                    <ProtectedRoute>
+                        {withSuspense(Notifications)}
+                    </ProtectedRoute>
+                )
+            },
+            {
+                path: 'import-product',
+                element: (
+                    <ProtectedRoute>
+                        {withSuspense(ImportProduct)}
+                    </ProtectedRoute>
+                )
+            },
             // Catch-all 404 route - MUST BE LAST
             { path: '*', element: withSuspense(NotFound) }
         ],
@@ -144,6 +166,10 @@ export const router = createBrowserRouter([
             { path: 'orders', element: withSuspense(AdminOrders) },
             { path: 'users', element: withSuspense(AdminUsers) },
             { path: 'contact', element: withSuspense(AdminContactSubmissions) },
+            { path: 'banners', element: withSuspense(AdminBanners) },
+            { path: 'coupons', element: withSuspense(AdminCoupons) },
+            { path: 'returns', element: withSuspense(AdminReturns) },
+            { path: 'settings', element: withSuspense(AdminSettings) },
         ],
     },
     {

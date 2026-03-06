@@ -10,12 +10,15 @@ import {
     ArrowLeft,
     Truck,
     Shield,
-    CheckCircle2
+    CheckCircle2,
+    Tag,
+    Loader2
 } from 'lucide-react'
 import { Button } from '../ui/button'
 import useCartStore from '../../store/cartStore'
 import { getProductImageUrl, NO_IMAGE_PLACEHOLDER } from '../ui/imageUtils'
 import { useToast } from '../ui/use-toast'
+import { applyCoupon, removeCoupon } from '../../services/coupon'
 
 const Cart = () => {
     const navigate = useNavigate()
@@ -23,9 +26,41 @@ const Cart = () => {
     const { toast } = useToast()
 
     const subtotal = total
-    const shippingThreshold = 999
-    const shipping = subtotal > shippingThreshold ? 0 : 99
-    const finalTotal = subtotal + shipping
+    const shipping = 0
+
+    const [couponCode, setCouponCode] = useState('')
+    const [couponDiscount, setCouponDiscount] = useState(0)
+    const [couponApplied, setCouponApplied] = useState(null)
+    const [couponLoading, setCouponLoading] = useState(false)
+    const [couponError, setCouponError] = useState('')
+
+    const handleApplyCoupon = async () => {
+        if (!couponCode.trim()) return
+        setCouponLoading(true)
+        setCouponError('')
+        try {
+            const result = await applyCoupon(couponCode.trim(), subtotal)
+            const data = result?.data || result
+            setCouponDiscount(data.discount || 0)
+            setCouponApplied(data.code || couponCode.trim())
+            toast({ title: "Coupon Applied!", description: `You saved ₹${data.discount}` })
+        } catch (err) {
+            setCouponError(err?.response?.data?.message || err?.message || 'Invalid coupon code')
+            setCouponDiscount(0)
+            setCouponApplied(null)
+        } finally {
+            setCouponLoading(false)
+        }
+    }
+
+    const handleRemoveCoupon = () => {
+        setCouponDiscount(0)
+        setCouponApplied(null)
+        setCouponCode('')
+        setCouponError('')
+    }
+
+    const finalTotal = subtotal + shipping - couponDiscount
 
     const handleUpdateItem = async (itemId, quantity) => {
         try {
@@ -129,15 +164,11 @@ const Cart = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
                     {/* Cart Items List */}
                     <div className="lg:col-span-8 space-y-6">
-                        {/* Free shipping progress */}
-                        {subtotal < shippingThreshold && (
-                            <div className="bg-blue-50 rounded-xl p-4 flex items-center gap-4 text-blue-700 border border-blue-100">
-                                <Truck className="h-5 w-5 flex-shrink-0" />
-                                <p className="text-sm font-medium">
-                                    Add <span className="font-bold">₹{Math.round(shippingThreshold - subtotal).toLocaleString()}</span> more for free shipping!
-                                </p>
-                            </div>
-                        )}
+                        {/* Free shipping badge */}
+                        <div className="bg-green-50 rounded-xl p-4 flex items-center gap-4 text-green-700 border border-green-100">
+                            <Truck className="h-5 w-5 flex-shrink-0" />
+                            <p className="text-sm font-medium">Free shipping on all orders!</p>
+                        </div>
 
                         <AnimatePresence mode="popLayout">
                             {items.map((item) => {
@@ -255,6 +286,42 @@ const Cart = () => {
                                             {shipping === 0 ? 'Free' : `₹${shipping}`}
                                         </span>
                                     </div>
+                                    {couponDiscount > 0 && (
+                                        <div className="flex justify-between text-green-600">
+                                            <span>Coupon Discount</span>
+                                            <span className="font-medium">-₹{couponDiscount}</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Coupon Code */}
+                                <div className="mb-6 pt-4 border-t border-border">
+                                    {couponApplied ? (
+                                        <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-800">
+                                            <div className="flex items-center gap-2">
+                                                <Tag className="h-4 w-4 text-green-600" />
+                                                <span className="text-sm font-semibold text-green-700 dark:text-green-400">{couponApplied}</span>
+                                                <span className="text-sm text-green-600">-₹{couponDiscount}</span>
+                                            </div>
+                                            <button onClick={handleRemoveCoupon} className="text-xs text-red-500 hover:text-red-700 font-medium">Remove</button>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Enter coupon code"
+                                                    value={couponCode}
+                                                    onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError(''); }}
+                                                    className="flex-1 px-3 py-2 text-sm bg-muted/50 border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 text-foreground placeholder:text-muted-foreground"
+                                                />
+                                                <Button variant="outline" size="sm" onClick={handleApplyCoupon} disabled={couponLoading || !couponCode.trim()} className="px-4">
+                                                    {couponLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Apply'}
+                                                </Button>
+                                            </div>
+                                            {couponError && <p className="text-xs text-red-500 mt-1.5">{couponError}</p>}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="border-t border-border pt-4 mb-6">
@@ -267,7 +334,7 @@ const Cart = () => {
                                 <Button
                                     size="lg"
                                     className="w-full text-base font-semibold py-6 rounded-xl shadow-lg shadow-primary/25"
-                                    onClick={() => navigate('/checkout')}
+                                    onClick={() => navigate('/checkout', { state: { couponCode: couponApplied, couponDiscount } })}
                                 >
                                     Proceed to Checkout
                                     <ArrowRight className="ml-2 h-5 w-5" />
@@ -298,7 +365,7 @@ const Cart = () => {
                 <Button
                     size="lg"
                     className="flex-1 rounded-xl shadow-lg shadow-primary/25 h-12"
-                    onClick={() => navigate('/checkout')}
+                    onClick={() => navigate('/checkout', { state: { couponCode: couponApplied, couponDiscount } })}
                 >
                     Checkout
                     <ArrowRight className="ml-2 h-4 w-4" />

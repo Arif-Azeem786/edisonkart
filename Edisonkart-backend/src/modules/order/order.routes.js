@@ -12,12 +12,12 @@ router.use(verifyToken);
 
 router.post('/', orderController.createOrder);
 router.get('/my-orders', orderController.getUserOrders);
+router.get('/admin/returns', requireRole('ADMIN'), orderController.getReturnRequests);
 router.get('/:orderId', orderController.getOrder);
 router.post('/:orderId/cancel', orderController.cancelOrder);
 router.post('/:orderId/return', orderController.requestReturn);
 router.get('/:orderId/download-invoice', orderController.downloadInvoice);
-
-// Admin only
 router.put('/:orderId/status', requireRole('ADMIN'), orderController.updateOrderStatus);
+router.post('/:orderId/return-action', requireRole('ADMIN'), orderController.approveReturn);
 
 module.exports = router;

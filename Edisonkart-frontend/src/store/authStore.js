@@ -26,12 +26,16 @@ const useAuthStore = create(
         }
       },
 
-      login: async (email, password) => {
+      login: async (emailOrToken, password) => {
         set({ isLoading: true });
         try {
-          const data = await apiLogin(email, password);
-          // Assume backend returns user and token (if using cookies, token might not be in body)
-          set({ user: data.user, token: data.token, role: data.user.role, isAuthenticated: true });
+          if (typeof emailOrToken === 'object' && emailOrToken?.token && emailOrToken?.user) {
+            const { token, user } = emailOrToken;
+            set({ user, token, role: user?.role, isAuthenticated: true });
+          } else {
+            const data = await apiLogin(emailOrToken, password);
+            set({ user: data.user, token: data.token, role: data.user.role, isAuthenticated: true });
+          }
         } catch (error) {
           throw error;
         } finally {

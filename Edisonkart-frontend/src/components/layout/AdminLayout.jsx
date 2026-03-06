@@ -16,7 +16,9 @@ import {
   ExternalLink,
   Calendar,
   Store,
-  MessageSquare
+  MessageSquare,
+  Image,
+  RotateCcw
 } from 'lucide-react'
 import useAuthStore from '../../store/authStore'
 import ScrollToTop from '../ui/ScrollToTop'
@@ -74,7 +76,11 @@ const AdminLayout = () => {
     { path: '/admin/products', icon: Package, label: 'Products' },
     { path: '/admin/categories', icon: Layers, label: 'Categories' },
     { path: '/admin/users', icon: Users, label: 'Users', adminOnly: true },
+    { path: '/admin/banners', icon: Image, label: 'Banners' },
+    { path: '/admin/coupons', icon: Tag, label: 'Coupons' },
+    { path: '/admin/returns', icon: RotateCcw, label: 'Returns' },
     { path: '/admin/contact', icon: MessageSquare, label: 'Contact' },
+    { path: '/admin/settings', icon: Settings, label: 'Settings', adminOnly: true },
   ]
 
   // Filter menu items by role

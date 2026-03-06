@@ -7,3 +7,5 @@ export const resendOTP = (email) => api.post('/auth/resend-otp', { email }).then
 export const forgotPassword = (email) => api.post('/auth/forgot-password', { email }).then(res => res.data);
 export const verifyResetOTP = (email, otp) => api.post('/auth/verify-reset-otp', { email, otp }).then(res => res.data);
 export const resetPassword = (email, otp, newPassword) => api.post('/auth/reset-password', { email, otp, newPassword }).then(res => res.data);
+export const googleLogin = (idToken, accessToken, userInfo) =>
+  api.post('/auth/google', { idToken, accessToken, userInfo }).then(res => res.data);

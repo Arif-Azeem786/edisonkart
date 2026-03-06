@@ -18,6 +18,7 @@ import { placeOrder } from '../../services/order'
 import { getProductImageUrl } from '../ui/imageUtils'
 import { openRazorpayCheckout } from '../../utils/razorpayUtils.js'
 import { useToast } from '../ui/use-toast'
+import { getPublicSettings } from '../../services/settings'
 
 
 const steps = [
@@ -36,9 +37,19 @@ const Checkout = () => {
     const [selectedAddress, setSelectedAddress] = useState(null)
     const [isPlacing, setIsPlacing] = useState(false)
     const [orderResult, setOrderResult] = useState(null)
+    const [paymentMethod, setPaymentMethod] = useState('online')
+    const [codEnabled, setCodEnabled] = useState(false)
+
+    useEffect(() => {
+        getPublicSettings().then(s => {
+            if (s?.codEnabled) setCodEnabled(true);
+        }).catch(() => {});
+    }, []);
 
     // Buy Now mode — product passed via navigation state
     const buyNowData = location.state?.buyNow || null
+    const couponFromCart = location.state?.couponCode || null
+    const couponDiscountFromCart = Number(location.state?.couponDiscount) || 0
 
     const addresses = user?.addresses || []
     const addressesLoading = false
@@ -65,8 +76,9 @@ const Checkout = () => {
         const linePrice = Number(item?.priceSnapshot) * Number(item?.quantity);
         return sum + (Number.isFinite(linePrice) ? linePrice : 0);
     }, 0);
-    const shipping = subtotal > 999 ? 0 : 99
-    const finalTotal = subtotal + shipping
+    const shipping = 0
+    const couponDiscount = couponFromCart ? couponDiscountFromCart : 0
+    const finalTotal = Math.max(0, subtotal + shipping - couponDiscount)
 
 
 
@@ -84,7 +96,7 @@ const Checkout = () => {
         try {
             const orderData = {
                 addressId: selectedAddress._id,
-                paymentMethod: 'razorpay',
+                paymentMethod: paymentMethod === 'cod' ? 'cod' : 'razorpay',
             }
 
             // If Buy Now, send the product info directly
@@ -113,7 +125,15 @@ const Checkout = () => {
             const payload = result?.data ?? result
 
             // Expecting backend to return razorpayOrderId and razorpayKeyId
-            if (payload?.razorpayOrderId && payload?.razorpayKeyId) {
+            if (paymentMethod === 'cod') {
+                toast({
+                    title: "Order Placed!",
+                    description: "Your COD order has been placed successfully.",
+                });
+                setOrderResult(payload);
+                setCurrentStep(2);
+                clearCart();
+            } else if (payload?.razorpayOrderId && payload?.razorpayKeyId) {
                 await openRazorpayCheckout({
                     key: payload.razorpayKeyId,
                     orderId: payload.razorpayOrderId,
@@ -342,18 +362,41 @@ const Checkout = () => {
                                     <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-6 md:p-8">
                                         <h2 className="text-2xl font-bold text-foreground mb-6">Payment Method</h2>
 
-                                        <div className="bg-primary/5 p-6 rounded-xl border border-primary/10 mb-8">
-                                            <div className="flex items-start gap-4">
-                                                <div className="p-3 bg-background rounded-full shadow-sm">
-                                                    <Shield className="h-6 w-6 text-primary" />
+                                        <div className="space-y-3 mb-8">
+                                            <button
+                                                onClick={() => setPaymentMethod('online')}
+                                                className={`w-full flex items-start gap-4 p-5 rounded-xl border-2 transition-all text-left ${paymentMethod === 'online' ? 'border-primary bg-primary/5' : 'border-border/50 hover:border-primary/30'}`}
+                                            >
+                                                <div className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${paymentMethod === 'online' ? 'border-primary' : 'border-muted-foreground/40'}`}>
+                                                    {paymentMethod === 'online' && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
                                                 </div>
-                                                <div>
-                                            <h3 className="font-semibold text-lg text-foreground mb-1">Secure Payment via Razorpay</h3>
-                                                    <p className="text-muted-foreground">
-                                                        You will complete your payment securely using Razorpay UPI / Cards / Netbanking with industry-standard encryption.
-                                                    </p>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <CreditCard className="h-5 w-5 text-primary" />
+                                                        <span className="font-semibold text-foreground">Online Payment</span>
+                                                    </div>
+                                                    <p className="text-sm text-muted-foreground mt-1">UPI, Cards, Netbanking via Razorpay</p>
                                                 </div>
-                                            </div>
+                                                <Shield className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                                            </button>
+
+                                            {codEnabled && (
+                                                <button
+                                                    onClick={() => setPaymentMethod('cod')}
+                                                    className={`w-full flex items-start gap-4 p-5 rounded-xl border-2 transition-all text-left ${paymentMethod === 'cod' ? 'border-primary bg-primary/5' : 'border-border/50 hover:border-primary/30'}`}
+                                                >
+                                                    <div className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${paymentMethod === 'cod' ? 'border-primary' : 'border-muted-foreground/40'}`}>
+                                                        {paymentMethod === 'cod' && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <Truck className="h-5 w-5 text-orange-500" />
+                                                            <span className="font-semibold text-foreground">Cash on Delivery</span>
+                                                        </div>
+                                                        <p className="text-sm text-muted-foreground mt-1">Pay when your order arrives</p>
+                                                    </div>
+                                                </button>
+                                            )}
                                         </div>
 
                                         {selectedAddress && (
@@ -525,10 +568,14 @@ const Checkout = () => {
                                             </div>
                                             <div className="flex justify-between text-sm">
                                                 <span className="text-muted-foreground">Shipping</span>
-                                                <span className={`font-medium ${shipping === 0 ? 'text-green-600' : 'text-foreground'}`}>
-                                                    {shipping === 0 ? 'Free' : `₹${shipping}`}
-                                                </span>
+                                                <span className="font-medium text-green-600">Free</span>
                                             </div>
+                                            {couponDiscount > 0 && (
+                                                <div className="flex justify-between text-sm">
+                                                    <span className="text-muted-foreground">Coupon ({couponFromCart})</span>
+                                                    <span className="font-medium text-green-600">-₹{Math.round(couponDiscount).toLocaleString()}</span>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="border-t border-border pt-5">

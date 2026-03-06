@@ -7,6 +7,17 @@ export const getProductBySlug = (slug) => api.get(`/products/${slug}`).then(res 
 export const getProductById = (id) => api.get(`/products/${id}`).then(res => res.data);
 export const getCategories = () => api.get('/categories').then(res => res.data);
 export const getProductImage = (imageId) => `${api.defaults.baseURL}/products/image/${imageId}`;
+export const getProductVideoUrl = (videoId) => `${api.defaults.baseURL}/products/video/${videoId}`;
+export const getProductVideos = (videoIds) => (videoIds?.map(id => getProductVideoUrl(id)) || []);
+
+export const searchByImage = (file) => {
+  const formData = new FormData();
+  formData.append('image', file);
+  return api.post('/products/search/image', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 30000
+  }).then(res => res.data);
+};
 
 export const createProduct = (productData) => api.post('/products', productData);
 export const updateProduct = (id, productData) => api.put(`/products/${id}`, productData);

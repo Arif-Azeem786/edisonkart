@@ -79,8 +79,13 @@ const Footer = () => {
             animate={footerInView ? 'visible' : 'hidden'}
             className="sm:col-span-2 lg:col-span-4"
           >
-            <Link to="/" className="inline-block mb-6">
-              <img src="/logo.png" alt="EdisonKart" className="h-10 sm:h-12 w-auto brightness-0 invert" />
+            <Link to="/" className="inline-flex items-center gap-2 mb-6">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-[#F97316] to-[#EA580C] flex items-center justify-center shadow-lg shadow-[#F97316]/20">
+                <span className="text-white font-black text-lg sm:text-xl">E</span>
+              </div>
+              <span className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                Edison<span className="text-[#F97316]">Kart</span>
+              </span>
             </Link>
             <p className="text-white/70 leading-relaxed mb-8 max-w-sm text-sm sm:text-base">
               Your premium destination for high-end electronics and gadgets. We deliver quality, speed, and exceptional service nationwide.
@@ -201,9 +206,14 @@ const Footer = () => {
           animate={footerInView ? 'visible' : 'hidden'}
           className="pt-6 sm:pt-8 border-t border-white/[0.12] flex flex-col md:flex-row justify-between items-center gap-4 sm:gap-6"
         >
-          <p className="text-white/50 text-sm">
-            © 2026 EdisonKart. All rights reserved.
-          </p>
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-[#F97316] to-[#EA580C] flex items-center justify-center">
+              <span className="text-white font-black text-xs">E</span>
+            </div>
+            <p className="text-white/50 text-sm">
+              © 2026 <span className="text-white/70 font-semibold">EdisonKart</span>. All rights reserved.
+            </p>
+          </div>
 
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-3 opacity-60 hover:opacity-100 transition-all duration-300">

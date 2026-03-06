@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { X, Upload, Plus, Trash2 } from 'lucide-react'
+import { X, Upload, Plus, Trash2, Video, Layers } from 'lucide-react'
 import ReactQuill from 'react-quill'
 import 'react-quill/dist/quill.snow.css'
 import { Button } from '../ui/button'
@@ -40,6 +40,8 @@ const ProductModal = ({ isOpen, onClose, product }) => {
     })
     const [images, setImages] = useState([])
     const [imagePreviews, setImagePreviews] = useState([])
+    const [videos, setVideos] = useState([])
+    const [videoPreviews, setVideoPreviews] = useState([])
     const [variantImages, setVariantImages] = useState({})
 
     const queryClient = useQueryClient()
@@ -72,6 +74,11 @@ const ProductModal = ({ isOpen, onClose, product }) => {
                     `${import.meta.env.VITE_API_URL || ''}/products/image/${id}`
                 ))
             }
+            if (product.videoIds) {
+                setVideoPreviews(product.videoIds.map(id =>
+                    `${import.meta.env.VITE_API_URL || ''}/products/video/${id}`
+                ))
+            }
             setVariantImages({})
         } else {
             setFormData({
@@ -91,6 +98,8 @@ const ProductModal = ({ isOpen, onClose, product }) => {
             })
             setImages([])
             setImagePreviews([])
+            setVideos([])
+            setVideoPreviews([])
             setVariantImages({})
         }
     }, [product])
@@ -146,6 +155,7 @@ const ProductModal = ({ isOpen, onClose, product }) => {
                 }
             })
             images.forEach(image => formData.append('images', image))
+            videos.forEach(video => formData.append('videos', video))
             Object.entries(variantImages).forEach(([vIdx, files]) => {
                 files.forEach(f => formData.append(`variant_${vIdx}_images`, f))
             })
@@ -175,6 +185,7 @@ const ProductModal = ({ isOpen, onClose, product }) => {
                 }
             })
             images.forEach(image => formData.append('images', image))
+            videos.forEach(video => formData.append('videos', video))
             Object.entries(variantImages).forEach(([vIdx, files]) => {
                 files.forEach(f => formData.append(`variant_${vIdx}_images`, f))
             })
@@ -440,39 +451,46 @@ const ProductModal = ({ isOpen, onClose, product }) => {
                     </div>
 
                     {/* Variant Configuration */}
-                    <div className="space-y-4 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                    <div className="space-y-4 p-5 bg-gradient-to-br from-blue-50 to-indigo-50/50 border border-blue-200/60 rounded-xl">
                         <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="font-semibold text-blue-900">Product Variants</h3>
-                                <p className="text-xs text-blue-700">Add options like Color, Size, or Storage</p>
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm">
+                                    <Layers className="h-4 w-4 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-blue-900 text-sm">Product Variants</h3>
+                                    <p className="text-[11px] text-blue-600">Color, Size, Storage, Material etc.</p>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-4">
-                                <Label htmlFor="hasVariants" className="cursor-pointer text-blue-900 font-medium">Has Variants?</Label>
+                            <label className="relative inline-flex items-center cursor-pointer">
                                 <input
                                     type="checkbox"
-                                    id="hasVariants"
                                     checked={formData.hasVariants}
                                     onChange={(e) => setFormData({ ...formData, hasVariants: e.target.checked })}
-                                    className="w-5 h-5 accent-blue-600 rounded border-blue-300 focus:ring-blue-500"
+                                    className="sr-only peer"
                                 />
-                            </div>
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600" />
+                            </label>
                         </div>
 
                         {formData.hasVariants && (
                             <motion.div 
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: 'auto' }}
-                                className="space-y-6 pt-4 border-t border-blue-100"
+                                className="space-y-5 pt-4 border-t border-blue-200/60"
                             >
-                                {/* Attributes Definition */}
+                                {/* Step 1: Define Attributes */}
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-blue-900">Attributes</Label>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">1</span>
+                                            <Label className="text-blue-900 font-semibold text-xs">Define Attributes</Label>
+                                        </div>
                                         <Button 
                                             type="button" 
                                             variant="outline" 
                                             size="sm" 
-                                            className="h-7 text-xs border-blue-200 text-blue-700"
+                                            className="h-7 text-[11px] border-blue-300 text-blue-700 hover:bg-blue-100"
                                             onClick={() => {
                                                 const attrs = [...(formData.variantAttributes || [])];
                                                 attrs.push({ name: '', values: [''] });
@@ -482,95 +500,102 @@ const ProductModal = ({ isOpen, onClose, product }) => {
                                             <Plus className="h-3 w-3 mr-1" /> Add Attribute
                                         </Button>
                                     </div>
+
+                                    {(formData.variantAttributes || []).length === 0 && (
+                                        <div className="text-center py-5 bg-white/60 rounded-lg border border-dashed border-blue-200">
+                                            <p className="text-xs text-blue-400">Click "Add Attribute" to start — e.g. Color, Size, Storage</p>
+                                        </div>
+                                    )}
                                     
                                     {(formData.variantAttributes || []).map((attr, attrIdx) => (
-                                        <div key={attrIdx} className="bg-white p-3 rounded-lg border border-blue-100 space-y-3">
-                                            <div className="flex gap-2">
+                                        <div key={attrIdx} className="bg-white rounded-xl border border-blue-100 shadow-sm overflow-hidden">
+                                            <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-100">
                                                 <Input 
-                                                    placeholder="e.g. Color"
+                                                    placeholder="Attribute name (e.g. Color, Size)"
                                                     value={attr.name}
                                                     onChange={(e) => {
                                                         const attrs = [...formData.variantAttributes];
                                                         attrs[attrIdx].name = e.target.value;
                                                         setFormData({ ...formData, variantAttributes: attrs });
                                                     }}
-                                                    className="flex-1 h-8 text-sm"
+                                                    className="flex-1 h-8 text-sm font-medium border-0 bg-transparent shadow-none focus-visible:ring-0 px-0"
                                                 />
                                                 <Button 
                                                     type="button" 
                                                     variant="ghost" 
                                                     size="sm" 
-                                                    className="h-8 w-8 p-0 text-red-500"
+                                                    className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
                                                     onClick={() => {
                                                         const attrs = formData.variantAttributes.filter((_, i) => i !== attrIdx);
                                                         setFormData({ ...formData, variantAttributes: attrs });
                                                     }}
                                                 >
-                                                    <Trash2 className="h-4 w-4" />
+                                                    <Trash2 className="h-3.5 w-3.5" />
                                                 </Button>
                                             </div>
-                                            <div className="flex flex-wrap gap-2">
-                                                {attr.values.map((val, valIdx) => (
-                                                    <div key={valIdx} className="relative group">
-                                                        <Input 
-                                                            value={val}
-                                                            onChange={(e) => {
-                                                                const attrs = [...formData.variantAttributes];
-                                                                attrs[attrIdx].values[valIdx] = e.target.value;
-                                                                setFormData({ ...formData, variantAttributes: attrs });
-                                                            }}
-                                                            className="w-24 h-7 text-xs pr-6"
-                                                        />
-                                                        {attr.values.length > 1 && (
-                                                            <button 
-                                                                type="button"
-                                                                className="absolute right-1 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600"
-                                                                onClick={() => {
+                                            <div className="p-3">
+                                                <p className="text-[10px] text-slate-400 mb-2 font-medium uppercase tracking-wider">Values</p>
+                                                <div className="flex flex-wrap gap-2 items-center">
+                                                    {attr.values.map((val, valIdx) => (
+                                                        <div key={valIdx} className="flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-lg pl-3 pr-1 py-1">
+                                                            <input 
+                                                                value={val}
+                                                                onChange={(e) => {
                                                                     const attrs = [...formData.variantAttributes];
-                                                                    attrs[attrIdx].values = attrs[attrIdx].values.filter((_, i) => i !== valIdx);
+                                                                    attrs[attrIdx].values[valIdx] = e.target.value;
                                                                     setFormData({ ...formData, variantAttributes: attrs });
                                                                 }}
-                                                            >
-                                                                <X className="h-3 w-3" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                                <Button 
-                                                    type="button" 
-                                                    variant="ghost" 
-                                                    size="sm" 
-                                                    className="h-7 px-2 text-[10px] text-blue-600"
-                                                    onClick={() => {
-                                                        const attrs = [...formData.variantAttributes];
-                                                        attrs[attrIdx].values.push('');
-                                                        setFormData({ ...formData, variantAttributes: attrs });
-                                                    }}
-                                                >
-                                                    + Add Value
-                                                </Button>
+                                                                placeholder="Value"
+                                                                className="w-20 bg-transparent text-xs font-medium text-blue-900 border-0 outline-none placeholder:text-blue-300"
+                                                            />
+                                                            {attr.values.length > 1 && (
+                                                                <button 
+                                                                    type="button"
+                                                                    className="w-5 h-5 rounded-md flex items-center justify-center text-blue-400 hover:text-red-500 hover:bg-red-50 transition"
+                                                                    onClick={() => {
+                                                                        const attrs = [...formData.variantAttributes];
+                                                                        attrs[attrIdx].values = attrs[attrIdx].values.filter((_, i) => i !== valIdx);
+                                                                        setFormData({ ...formData, variantAttributes: attrs });
+                                                                    }}
+                                                                >
+                                                                    <X className="h-3 w-3" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                    <button 
+                                                        type="button" 
+                                                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg border-2 border-dashed border-blue-200 text-[11px] font-medium text-blue-500 hover:border-blue-400 hover:text-blue-700 transition"
+                                                        onClick={() => {
+                                                            const attrs = [...formData.variantAttributes];
+                                                            attrs[attrIdx].values.push('');
+                                                            setFormData({ ...formData, variantAttributes: attrs });
+                                                        }}
+                                                    >
+                                                        <Plus className="h-3 w-3" /> Add
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
 
-                                {/* Variants Generation & Listing */}
+                                {/* Step 2: Generate & Edit Variants */}
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-blue-900">Variant Price & Stock</Label>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">2</span>
+                                            <Label className="text-blue-900 font-semibold text-xs">Variants ({(formData.variants || []).length})</Label>
+                                        </div>
                                         <Button 
                                             type="button" 
-                                            variant="secondary" 
                                             size="sm" 
-                                            className="h-7 text-xs"
+                                            className="h-8 text-[11px] bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
                                             onClick={() => {
-                                                // Generate combinations based on attributes
                                                 if (!formData.variantAttributes?.length) return;
                                                 
                                                 const generateCombinations = (index, current) => {
-                                                    if (index === formData.variantAttributes.length) {
-                                                        return [current];
-                                                    }
+                                                    if (index === formData.variantAttributes.length) return [current];
                                                     const attribute = formData.variantAttributes[index];
                                                     let results = [];
                                                     attribute.values.forEach(val => {
@@ -599,110 +624,147 @@ const ProductModal = ({ isOpen, onClose, product }) => {
                                                 setFormData({ ...formData, variants: newVariants });
                                             }}
                                         >
-                                            Generate All Combinations
+                                            ⚡ Generate All Combinations
                                         </Button>
                                     </div>
 
-                                    <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                                        {(formData.variants || []).map((v, vIdx) => (
-                                            <div key={vIdx} className="bg-white p-3 rounded-lg border border-slate-200 text-xs space-y-2">
-                                                <div className="flex items-center justify-between font-bold text-blue-900 border-b pb-1 mb-2">
-                                                    <span>{Object.entries(v.attributes).map(([k, val]) => `${k}: ${val}`).join(' / ')}</span>
-                                                    <Button 
-                                                        type="button" 
-                                                        variant="ghost" 
-                                                        size="sm" 
-                                                        className="h-6 w-6 p-0 text-red-500"
-                                                        onClick={() => {
-                                                            const variants = formData.variants.filter((_, i) => i !== vIdx);
-                                                            setFormData({ ...formData, variants: variants });
-                                                        }}
-                                                    >
-                                                        <Trash2 className="h-3 w-3" />
-                                                    </Button>
-                                                </div>
-                                                <div className="grid grid-cols-3 gap-2">
-                                                    <div>
-                                                        <Label className="text-[10px]">Price (₹)</Label>
-                                                        <Input 
-                                                            type="number" 
-                                                            value={v.price} 
-                                                            onChange={(e) => {
-                                                                const vars = [...formData.variants];
-                                                                vars[vIdx].price = e.target.value;
-                                                                setFormData({ ...formData, variants: vars });
+                                    <div className="max-h-[400px] overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+                                        {(formData.variants || []).map((v, vIdx) => {
+                                            const discPct = v.price && v.discountPrice && Number(v.price) > Number(v.discountPrice)
+                                                ? Math.round((1 - Number(v.discountPrice) / Number(v.price)) * 100) : 0;
+                                            return (
+                                                <div key={vIdx} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden hover:border-blue-300 transition">
+                                                    {/* Variant Header */}
+                                                    <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            {Object.entries(v.attributes).map(([k, val]) => (
+                                                                <span key={k} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-100 text-blue-800 text-[11px] font-semibold">
+                                                                    <span className="text-blue-500 font-normal">{k}:</span> {val}
+                                                                </span>
+                                                            ))}
+                                                            {discPct > 0 && (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-green-100 text-green-700 text-[10px] font-bold">
+                                                                    {discPct}% OFF
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <Button 
+                                                            type="button" 
+                                                            variant="ghost" 
+                                                            size="sm" 
+                                                            className="h-6 w-6 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                                                            onClick={() => {
+                                                                const variants = formData.variants.filter((_, i) => i !== vIdx);
+                                                                setFormData({ ...formData, variants: variants });
                                                             }}
-                                                            className="h-7 text-xs" 
-                                                        />
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </Button>
                                                     </div>
-                                                    <div>
-                                                        <Label className="text-[10px]">Discount (₹)</Label>
-                                                        <Input 
-                                                            type="number" 
-                                                            value={v.discountPrice} 
-                                                            onChange={(e) => {
-                                                                const vars = [...formData.variants];
-                                                                vars[vIdx].discountPrice = e.target.value;
-                                                                setFormData({ ...formData, variants: vars });
-                                                            }}
-                                                            className="h-7 text-xs" 
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <Label className="text-[10px]">Stock</Label>
-                                                        <Input 
-                                                            type="number" 
-                                                            value={v.stock} 
-                                                            onChange={(e) => {
-                                                                const vars = [...formData.variants];
-                                                                vars[vIdx].stock = e.target.value;
-                                                                setFormData({ ...formData, variants: vars });
-                                                            }}
-                                                            className="h-7 text-xs" 
-                                                        />
-                                                    </div>
-                                                </div>
-                                                {/* Variant images - show when selecting color etc (Flipkart-style) */}
-                                                <div className="mt-2 pt-2 border-t border-blue-100">
-                                                    <Label className="text-[10px] text-blue-700">Images for this variant</Label>
-                                                    <div className="flex flex-wrap gap-1 mt-1">
-                                                        {(v.imageIds || []).map((id, i) => (
-                                                            <div key={i} className="relative w-12 h-12 rounded border overflow-hidden group">
-                                                                <img src={`${import.meta.env.VITE_API_URL || ''}/products/image/${id}`} alt="" className="w-full h-full object-cover" />
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => removeVariantImage(vIdx, 'existing', i)}
-                                                                    className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
-                                                                >
-                                                                    <Trash2 className="h-3 w-3 text-white" />
-                                                                </button>
+
+                                                    {/* Variant Body */}
+                                                    <div className="p-4 space-y-3">
+                                                        <div className="grid grid-cols-4 gap-3">
+                                                            <div className="space-y-1">
+                                                                <Label className="text-[10px] text-slate-500 font-medium">Original Price ₹</Label>
+                                                                <Input 
+                                                                    type="number" 
+                                                                    value={v.price} 
+                                                                    onChange={(e) => {
+                                                                        const vars = [...formData.variants];
+                                                                        vars[vIdx] = { ...vars[vIdx], price: e.target.value };
+                                                                        setFormData({ ...formData, variants: vars });
+                                                                    }}
+                                                                    className="h-8 text-xs font-medium" 
+                                                                />
                                                             </div>
-                                                        ))}
-                                                        {(variantImages[vIdx] || []).map((f, i) => (
-                                                            <div key={`new-${i}`} className="relative w-12 h-12 rounded border overflow-hidden group">
-                                                                <img src={URL.createObjectURL(f)} alt="" className="w-full h-full object-cover" />
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => removeVariantImage(vIdx, 'new', i)}
-                                                                    className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
-                                                                >
-                                                                    <Trash2 className="h-3 w-3 text-white" />
-                                                                </button>
+                                                            <div className="space-y-1">
+                                                                <Label className="text-[10px] text-green-600 font-medium">Selling Price ₹</Label>
+                                                                <Input 
+                                                                    type="number" 
+                                                                    value={v.discountPrice} 
+                                                                    onChange={(e) => {
+                                                                        const vars = [...formData.variants];
+                                                                        vars[vIdx] = { ...vars[vIdx], discountPrice: e.target.value };
+                                                                        setFormData({ ...formData, variants: vars });
+                                                                    }}
+                                                                    className="h-8 text-xs font-medium border-green-200 focus-visible:ring-green-500" 
+                                                                />
                                                             </div>
-                                                        ))}
-                                                        {((v.imageIds || []).length + (variantImages[vIdx] || []).length) < 5 && (
-                                                            <label className="w-12 h-12 rounded border-2 border-dashed border-blue-200 flex items-center justify-center cursor-pointer hover:border-blue-400 text-blue-500">
-                                                                <Plus className="h-4 w-4" />
-                                                                <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleVariantImageChange(vIdx, e)} />
-                                                            </label>
-                                                        )}
+                                                            <div className="space-y-1">
+                                                                <Label className="text-[10px] text-slate-500 font-medium">Stock</Label>
+                                                                <Input 
+                                                                    type="number" 
+                                                                    value={v.stock} 
+                                                                    onChange={(e) => {
+                                                                        const vars = [...formData.variants];
+                                                                        vars[vIdx] = { ...vars[vIdx], stock: e.target.value };
+                                                                        setFormData({ ...formData, variants: vars });
+                                                                    }}
+                                                                    className="h-8 text-xs font-medium" 
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <Label className="text-[10px] text-slate-500 font-medium">SKU</Label>
+                                                                <Input 
+                                                                    value={v.sku || ''} 
+                                                                    onChange={(e) => {
+                                                                        const vars = [...formData.variants];
+                                                                        vars[vIdx] = { ...vars[vIdx], sku: e.target.value };
+                                                                        setFormData({ ...formData, variants: vars });
+                                                                    }}
+                                                                    placeholder="SKU-001"
+                                                                    className="h-8 text-xs font-medium" 
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Variant Images */}
+                                                        <div className="pt-2 border-t border-slate-100">
+                                                            <Label className="text-[10px] text-slate-500 font-medium mb-1.5 block">Variant Images</Label>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {(v.imageIds || []).map((id, i) => (
+                                                                    <div key={i} className="relative w-14 h-14 rounded-lg border border-slate-200 overflow-hidden group shadow-sm">
+                                                                        <img src={`${import.meta.env.VITE_API_URL || ''}/products/image/${id}`} alt="" className="w-full h-full object-cover" />
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => removeVariantImage(vIdx, 'existing', i)}
+                                                                            className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                                                                        >
+                                                                            <Trash2 className="h-3.5 w-3.5 text-white" />
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                                {(variantImages[vIdx] || []).map((f, i) => (
+                                                                    <div key={`new-${i}`} className="relative w-14 h-14 rounded-lg border border-slate-200 overflow-hidden group shadow-sm">
+                                                                        <img src={URL.createObjectURL(f)} alt="" className="w-full h-full object-cover" />
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => removeVariantImage(vIdx, 'new', i)}
+                                                                            className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                                                                        >
+                                                                            <Trash2 className="h-3.5 w-3.5 text-white" />
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                                {((v.imageIds || []).length + (variantImages[vIdx] || []).length) < 5 && (
+                                                                    <label className="w-14 h-14 rounded-lg border-2 border-dashed border-blue-200 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition text-blue-400">
+                                                                        <Plus className="h-4 w-4" />
+                                                                        <span className="text-[8px] font-medium mt-0.5">Image</span>
+                                                                        <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleVariantImageChange(vIdx, e)} />
+                                                                    </label>
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                         {(!formData.variants || formData.variants.length === 0) && (
-                                            <div className="text-center py-4 text-slate-400 italic text-xs">
-                                                Click "Generate" or define attributes to see variants here.
+                                            <div className="text-center py-8 bg-white/60 rounded-xl border border-dashed border-blue-200">
+                                                <Layers className="h-8 w-8 text-blue-200 mx-auto mb-2" />
+                                                <p className="text-xs text-blue-400 font-medium">Define attributes above, then click "Generate All Combinations"</p>
+                                                <p className="text-[10px] text-slate-400 mt-1">Each variant gets its own price, stock, SKU & images</p>
                                             </div>
                                         )}
                                     </div>
@@ -748,6 +810,68 @@ const ProductModal = ({ isOpen, onClose, product }) => {
                         <p className="text-xs text-slate-500">
                             You can upload up to 5 images. Max file size: 5MB each.
                         </p>
+                    </div>
+
+                    {/* Videos - only show section when there are videos, otherwise just "Add Video" */}
+                    <div className="space-y-4">
+                        {videoPreviews.length > 0 && (
+                            <>
+                                <h3 className="font-semibold flex items-center gap-2">
+                                    <Video className="h-4 w-4" />
+                                    Product Videos
+                                </h3>
+                                <div className="space-y-3">
+                                    {videoPreviews.map((preview, index) => (
+                                        <div key={index} className="relative group">
+                                            <video
+                                                src={preview}
+                                                controls
+                                                className="w-full rounded-lg border border-slate-200 max-h-[200px]"
+                                                preload="metadata"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setVideos(prev => prev.filter((_, i) => i !== index))
+                                                    setVideoPreviews(prev => prev.filter((_, i) => i !== index))
+                                                }}
+                                                className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition shadow-lg"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                        {videoPreviews.length < 3 && (
+                            <>
+                                <label className="flex items-center justify-center gap-2 py-6 border-2 border-dashed rounded-lg cursor-pointer hover:border-[#F97316] transition group">
+                                    <Video className="h-6 w-6 text-slate-400 group-hover:text-[#F97316] transition" />
+                                    <span className="text-sm text-slate-500 group-hover:text-[#F97316]">Add Video</span>
+                                    <input
+                                        type="file"
+                                        accept="video/mp4,video/webm,video/mov"
+                                        onChange={(e) => {
+                                            const files = Array.from(e.target.files || [])
+                                            if (files.length === 0) return
+                                            if (videos.length + files.length > 3) {
+                                                toast({ variant: 'destructive', title: 'Too many videos', description: 'You can upload up to 3 videos.' })
+                                                return
+                                            }
+                                            setVideos(prev => [...prev, ...files])
+                                            const newPreviews = files.map(f => URL.createObjectURL(f))
+                                            setVideoPreviews(prev => [...prev, ...newPreviews])
+                                            e.target.value = ''
+                                        }}
+                                        className="hidden"
+                                    />
+                                </label>
+                                <p className="text-xs text-slate-500">
+                                    You can upload up to 3 videos. Max file size: 100MB each. Supported: MP4, WebM, MOV.
+                                </p>
+                            </>
+                        )}
                     </div>
 
                     <DialogFooter>

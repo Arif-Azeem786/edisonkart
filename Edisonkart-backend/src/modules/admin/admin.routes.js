@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('./admin.controller');
+const exportController = require('./export.controller');
 const { verifyToken } = require('../../middleware/auth.middleware');
 const { requireRole } = require('../../middleware/role.middleware');
 
@@ -34,5 +35,10 @@ router.post('/delivery-boy', requireTrueAdmin, adminController.createDeliveryBoy
 router.post('/employee', requireTrueAdmin, adminController.createEmployee);
 router.post('/vendor', requireTrueAdmin, adminController.createVendor);
 router.put('/orders/:orderId/assign-delivery', adminController.assignDeliveryBoy);
+
+// CSV Exports (admin only)
+router.get('/export/orders', requireTrueAdmin, exportController.exportOrders);
+router.get('/export/products', requireTrueAdmin, exportController.exportProducts);
+router.get('/export/users', requireTrueAdmin, exportController.exportUsers);
 
 module.exports = router;

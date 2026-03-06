@@ -29,6 +29,10 @@ const productSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'ProductImages'
   }],
+  videoIds: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ProductVideos'
+  }],
   price: {
     type: Number,
     required: true,

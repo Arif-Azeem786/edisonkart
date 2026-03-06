@@ -1,0 +1,19 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Environment files (safety net)
+.env
+.env.local
+.env.production
+
+# Debug logs
+debug-*.log
+*.log
+
+# Temporary files
+cleandb.js

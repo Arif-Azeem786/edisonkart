@@ -2,8 +2,11 @@ const Product = require('./product.model');
 const Category = require('../category/category.model');
 const { successResponse, errorResponse } = require('../../utils/responseFormatter');
 const slugify = require('../../utils/slugify');
-const { getImageStream, getImageInfo, deleteImage, getImagesInfo } = require('../../config/gridfs');
+const { getImageStream, getImageInfo, deleteImage, getImagesInfo, getVideoStream, getVideoInfo, deleteVideo } = require('../../config/gridfs');
 const mongoose = require('mongoose');
+const OpenAI = require('openai');
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const productController = {
   // Create product (Admin only)
@@ -50,6 +53,9 @@ const productController = {
       const mainFiles = Array.isArray(req.files?.images) ? req.files.images : (req.files ? [] : []);
       const imageIds = mainFiles.map(file => file.id);
 
+      const videoFiles = Array.isArray(req.files?.videos) ? req.files.videos : [];
+      const videoIds = videoFiles.map(file => file.id);
+
       // Merge variant image uploads into variants
       let finalVariants = cleanVariants;
       if (cleanHasVariants && req.files && typeof req.files === 'object') {
@@ -70,6 +76,7 @@ const productController = {
         description,
         categoryId,
         imageIds,
+        videoIds,
         brand,
         price,
         discountPrice,
@@ -344,6 +351,11 @@ const productController = {
         product.images = await getImagesInfo(product.imageIds);
       }
 
+      // Expose video URLs for frontend (videoIds are already on product)
+      if (product.videoIds && product.videoIds.length > 0) {
+        product.videoUrls = product.videoIds.map(vid => `/api/products/video/${vid}`);
+      }
+
       // Get related products (same category)
       const relatedProducts = await Product.find({
         categoryId: product.categoryId,
@@ -425,6 +437,18 @@ const productController = {
         updateData.imageIds = mainFiles.map(file => file.id);
       }
 
+      // Handle new videos if uploaded
+      const videoFiles = Array.isArray(req.files?.videos) ? req.files.videos : [];
+      if (videoFiles.length > 0) {
+        const existing = await Product.findById(id);
+        if (existing?.videoIds?.length > 0) {
+          for (const videoId of existing.videoIds) {
+            try { await deleteVideo(videoId); } catch (err) { console.error('Failed to delete video:', err); }
+          }
+        }
+        updateData.videoIds = videoFiles.map(file => file.id);
+      }
+
       // Merge variant image uploads into variants (keep existing + add new, or use trimmed list from form)
       if (cleanHasVariants && updateData.variants) {
         updateData.variants = updateData.variants.map((v, idx) => {
@@ -500,6 +524,117 @@ const productController = {
       const stream = getImageStream(new mongoose.Types.ObjectId(imageId));
       stream.pipe(res);
     } catch (error) {
+      next(error);
+    }
+  },
+
+  // Get product video
+  async getVideo(req, res, next) {
+    try {
+      const { videoId } = req.params;
+
+      if (!mongoose.Types.ObjectId.isValid(videoId)) {
+        return errorResponse(res, 'Invalid video ID', 400);
+      }
+
+      const videoInfo = await getVideoInfo(new mongoose.Types.ObjectId(videoId));
+      if (!videoInfo) {
+        return errorResponse(res, 'Video not found', 404);
+      }
+
+      const range = req.headers.range;
+      const videoSize = videoInfo.length;
+
+      if (range) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : videoSize - 1;
+        const chunkSize = end - start + 1;
+
+        res.writeHead(206, {
+          'Content-Range': `bytes ${start}-${end}/${videoSize}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': chunkSize,
+          'Content-Type': videoInfo.contentType
+        });
+
+        const stream = getVideoStream(new mongoose.Types.ObjectId(videoId));
+        stream.pipe(res);
+      } else {
+        res.set('Content-Type', videoInfo.contentType);
+        res.set('Content-Length', videoSize);
+
+        const stream = getVideoStream(new mongoose.Types.ObjectId(videoId));
+        stream.pipe(res);
+      }
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async searchByImage(req, res, next) {
+    try {
+      if (!req.file) {
+        return errorResponse(res, 'No image uploaded', 400);
+      }
+
+      if (!process.env.OPENAI_API_KEY) {
+        return errorResponse(res, 'Image search is not configured', 500);
+      }
+
+      const base64Image = req.file.buffer.toString('base64');
+      const mimeType = req.file.mimetype || 'image/jpeg';
+
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Identify this product. Return ONLY a short search query (3-6 words) that would help find this product in an online store. Include the product type, color, and brand if visible. No explanations, just the search terms.'
+              },
+              {
+                type: 'image_url',
+                image_url: { url: `data:${mimeType};base64,${base64Image}` }
+              }
+            ]
+          }
+        ],
+        max_tokens: 50
+      });
+
+      const searchTerms = response.choices[0]?.message?.content?.trim() || '';
+      console.log(`[image-search] AI identified: "${searchTerms}"`);
+
+      if (!searchTerms) {
+        return errorResponse(res, 'Could not identify the product in the image', 422);
+      }
+
+      const words = searchTerms.split(/\s+/).filter(w => w.length > 2);
+      const regexPattern = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+
+      const products = await Product.find({
+        $or: [
+          { name: { $regex: regexPattern, $options: 'i' } },
+          { description: { $regex: regexPattern, $options: 'i' } }
+        ]
+      })
+        .select('name slug price discountPrice images rating')
+        .limit(20)
+        .lean();
+
+      return successResponse(res, {
+        searchTerms,
+        products,
+        total: products.length
+      });
+    } catch (error) {
+      console.error('[image-search] Error:', error.message);
+      if (error.status === 429) {
+        return errorResponse(res, 'Too many requests. Please try again in a moment.', 429);
+      }
       next(error);
     }
   }

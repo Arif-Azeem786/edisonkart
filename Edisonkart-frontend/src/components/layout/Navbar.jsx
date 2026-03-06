@@ -14,6 +14,8 @@ import {
   Search,
   Tag,
   Store,
+  Camera,
+  Bell,
 } from 'lucide-react'
 import { Button } from '../ui/button'
 import useAuthStore from '../../store/authStore'
@@ -21,12 +23,14 @@ import useCartStore from '../../store/cartStore'
 import CartDrawer from '../cart/CartDrawer'
 import { cn } from '../../lib/utils'
 import { ThemeToggle } from '../ui/ThemeToggle'
-import { getSearchSuggestions, getProductImage } from '../../services/product'
-import { Loader2 } from 'lucide-react'
+import { getSearchSuggestions, getProductImage, searchByImage } from '../../services/product'
+import { getUnreadCount, markAllAsRead } from '../../services/notification'
+import { Loader2, ImageIcon } from 'lucide-react'
 
 const navLinks = [
   { name: 'Home', path: '/' },
   { name: 'Shop', path: '/products' },
+  { name: 'Import', path: '/import-product' },
   { name: 'About', path: '/about' },
   { name: 'Contact', path: '/contact' },
 ]
@@ -40,8 +44,41 @@ const Navbar = ({ cartDrawerOpen, setCartDrawerOpen }) => {
   const [suggestions, setSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
+  const [imageSearching, setImageSearching] = useState(false)
+  const [imageSearchResults, setImageSearchResults] = useState(null)
+  const [unreadNotifs, setUnreadNotifs] = useState(0)
   const searchInputRef = useRef(null)
   const searchContainerRef = useRef(null)
+  const cameraInputRef = useRef(null)
+
+  const handleCameraClick = () => {
+    cameraInputRef.current?.click()
+  }
+
+  const handleImageSearch = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setImageSearching(true)
+    setImageSearchResults(null)
+    try {
+      const result = await searchByImage(file)
+      const products = result?.data?.products || result?.products || []
+      const terms = result?.data?.searchTerms || result?.searchTerms || ''
+      if (products.length > 0) {
+        navigate(`/products?search=${encodeURIComponent(terms)}`)
+      } else {
+        setImageSearchResults({ terms, products: [] })
+        setTimeout(() => setImageSearchResults(null), 4000)
+      }
+    } catch (err) {
+      console.error('Image search error:', err)
+      setImageSearchResults({ terms: '', products: [], error: 'Could not search by image. Please try again.' })
+      setTimeout(() => setImageSearchResults(null), 4000)
+    } finally {
+      setImageSearching(false)
+    }
+  }
 
   const handleSearch = (e) => {
     e.preventDefault()
@@ -123,6 +160,19 @@ const Navbar = ({ cartDrawerOpen, setCartDrawerOpen }) => {
     setUserMenuOpen(false)
   }, [location.pathname])
 
+  useEffect(() => {
+    if (!isAuthenticated) return
+    const fetchUnread = async () => {
+      try {
+        const data = await getUnreadCount()
+        setUnreadNotifs(data?.data?.unreadCount ?? data?.unreadCount ?? 0)
+      } catch {}
+    }
+    fetchUnread()
+    const interval = setInterval(fetchUnread, 30000)
+    return () => clearInterval(interval)
+  }, [isAuthenticated])
+
   // Click outside listener for user menu
   const userMenuRef = useRef(null)
 
@@ -147,6 +197,44 @@ const Navbar = ({ cartDrawerOpen, setCartDrawerOpen }) => {
 
   return (
     <>
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleImageSearch}
+        className="hidden"
+      />
+
+      {/* Image search notification */}
+      <AnimatePresence>
+        {imageSearching && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] bg-white dark:bg-slate-900 shadow-2xl rounded-2xl px-6 py-4 flex items-center gap-3 border border-slate-200 dark:border-slate-700"
+          >
+            <Loader2 className="h-5 w-5 animate-spin text-[#1E3A8A]" />
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Analyzing image...</span>
+          </motion.div>
+        )}
+        {imageSearchResults && !imageSearching && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] bg-white dark:bg-slate-900 shadow-2xl rounded-2xl px-6 py-4 border border-slate-200 dark:border-slate-700"
+          >
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              {imageSearchResults.error || (imageSearchResults.products.length === 0
+                ? `No products found for "${imageSearchResults.terms}"`
+                : `Found ${imageSearchResults.products.length} results`)}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <motion.nav
         variants={navVariants}
         animate={hidden ? 'hidden' : 'visible'}
@@ -194,6 +282,15 @@ const Navbar = ({ cartDrawerOpen, setCartDrawerOpen }) => {
                     <X className="h-4 w-4" />
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={handleCameraClick}
+                  disabled={imageSearching}
+                  className="flex items-center px-3 border-l border-slate-200 dark:border-slate-700 text-slate-400 hover:text-[#1E3A8A] transition-colors disabled:opacity-50"
+                  title="Search by image"
+                >
+                  {imageSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                </button>
                 <button
                   type="submit"
                   className="flex items-center gap-1.5 px-5 bg-[#F97316] hover:bg-[#EA580C] text-white text-sm font-semibold transition-colors flex-shrink-0"
@@ -313,6 +410,17 @@ const Navbar = ({ cartDrawerOpen, setCartDrawerOpen }) => {
 
               {/* Theme Toggle — always visible, including mobile */}
               <ThemeToggle />
+
+              {isAuthenticated && (
+                <Link to="/notifications" className="relative p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                  <Bell className="h-5 w-5" />
+                  {unreadNotifs > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 h-4 min-w-[16px] px-1 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full">
+                      {unreadNotifs > 9 ? '9+' : unreadNotifs}
+                    </span>
+                  )}
+                </Link>
+              )}
 
               {/* Cart */}
               <motion.button
@@ -490,6 +598,9 @@ const Navbar = ({ cartDrawerOpen, setCartDrawerOpen }) => {
                 <X className="h-4 w-4" />
               </button>
             )}
+            <button type="button" onClick={handleCameraClick} disabled={imageSearching} className="px-2 text-slate-400 hover:text-[#1E3A8A] border-l border-slate-200 dark:border-slate-700 transition-colors disabled:opacity-50" title="Search by image">
+              {imageSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+            </button>
             <button type="submit" className="px-4 bg-[#F97316] hover:bg-[#EA580C] text-white flex-shrink-0 transition-colors">
               <Search className="h-4 w-4" />
             </button>

@@ -4,11 +4,11 @@ const paymentController = require('./payment.controller');
 const { verifyToken } = require('../../middleware/auth.middleware');
 const { requireRole } = require('../../middleware/role.middleware');
 
-// Public route — check payment status by orderId (used by payment-status redirect page)
-router.get('/order/:orderId', paymentController.getPaymentStatus);
-
 // All routes below require authentication
 router.use(verifyToken);
+
+// Check payment status by orderId
+router.get('/order/:orderId', paymentController.getPaymentStatus);
 
 // User routes
 router.post('/order/:orderId/retry', paymentController.retryPayment);

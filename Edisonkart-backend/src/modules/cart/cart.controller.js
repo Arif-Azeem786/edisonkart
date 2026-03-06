@@ -20,13 +20,19 @@ const cartController = {
       const updatedItems = [];
       for (const item of cart.items) {
         const product = item.productId;
-        if (product && product.isActive && product.stock > 0) {
-          // Update price if changed
-          const currentPrice = product.discountPrice || product.price;
-          if (item.priceSnapshot !== currentPrice) {
-            item.priceSnapshot = currentPrice;
+        if (product && product.isActive) {
+          let inStock = product.stock > 0;
+          if (item.variantId && product.variants?.length) {
+            const variant = product.variants.find(v => v._id?.toString() === item.variantId?.toString());
+            inStock = variant ? variant.stock > 0 : inStock;
           }
-          updatedItems.push(item);
+          if (inStock) {
+            const currentPrice = product.discountPrice || product.price;
+            if (item.priceSnapshot !== currentPrice) {
+              item.priceSnapshot = currentPrice;
+            }
+            updatedItems.push(item);
+          }
         }
       }
 
@@ -146,10 +152,17 @@ const cartController = {
         return errorResponse(res, 'Item not found in cart', 404);
       }
 
-      // Check stock
       const product = await Product.findById(item.productId);
-      if (!product || !product.isActive || quantity > product.stock) {
-        return errorResponse(res, `Only ${product?.stock || 0} items available`, 400);
+      if (!product || !product.isActive) {
+        return errorResponse(res, 'Product is no longer available', 400);
+      }
+      let availableStock = product.stock;
+      if (item.variantId && product.hasVariants) {
+        const variant = product.variants.id(item.variantId);
+        if (variant) availableStock = variant.stock;
+      }
+      if (quantity > availableStock) {
+        return errorResponse(res, `Only ${availableStock} items available`, 400);
       }
 
       item.quantity = quantity;

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useLocation } from 'react-router-dom'
 import ScrollToTop from '../ui/ScrollToTop'
 import CompareBar from '../product/CompareBar'
+import ChatWidget from '../chat/ChatWidget'
 import { useState } from 'react'
 
 const pageVariants = {
@@ -52,6 +53,7 @@ const MainLayout = () => {
       </main>
       <Footer />
       <CompareBar />
+      <ChatWidget />
       {/* Mobile bottom navigation bar */}
       <MobileBottomNav onCartOpen={() => setCartDrawerOpen(true)} />
     </div>
